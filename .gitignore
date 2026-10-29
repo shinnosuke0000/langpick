@@ -1,0 +1,13 @@
+# モデルの取得先（初回実行時に自動で sparse checkout される・44MB）
+assets/_menagerie/
+
+# 実行結果
+out/
+report/説明資料_*
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+
+# 提出用の個人メモ（公開しない）
+提出手順.md
