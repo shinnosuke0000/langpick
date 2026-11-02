@@ -129,6 +129,20 @@ def run_episode(env: Env, text: str, clip: Clip | None = None,
     grasp = estimate_grasp(view, target.box)
     place = estimate_place_point(view, dest.box)
 
+    # 検出枠の中に作業台より上の点が無いと、把持位置は原点のまま返ってくる。
+    # そのまま実行するとロボットが自分の土台へ手先を突っ込むので、ここで止める。
+    if not grasp.ok:
+        msg = (f"把持位置を推定できなかった"
+               f"（点群 {grasp.n_points} 点 / 広がり {grasp.spread:.3f} m）")
+        if clip is not None:
+            clip.hold(annotate(view.rgb, Banner(ins.text_ja, ins.text_en,
+                                                phase="ABORT", note=msg,
+                                                verdict="FAILURE"),
+                               [target, dest], scale=scale), 2.4)
+        return EpisodeResult(ins, target, dest, grasp, place, None, False,
+                             msg, dets, view.rgb, None, gt, gt,
+                             time.time() - t_start)
+
     if clip is not None:
         note = (f"RGB-D から推定: 把持点 ({grasp.position[0]:.3f}, "
                 f"{grasp.position[1]:.3f}, {grasp.position[2]:.3f}) m  /  "
@@ -187,7 +201,9 @@ def evaluate_against_truth(result: EpisodeResult) -> dict:
     tray_half = next(t.half for t in S.TRAYS if t.name == dname)
     out["distance_to_tray_center"] = float(np.linalg.norm(tp[:2] - dp[:2]))
     out["truly_in_tray"] = bool(out["distance_to_tray_center"] < tray_half)
-    if result.grasp is not None:
+    # 推定に失敗した把持位置（原点）と真値を比べても意味がないので、
+    # 有効な推定だったときだけ誤差を出す
+    if result.grasp is not None and result.grasp.ok:
         # 把持位置の誤差は「掴みにいった時点」の真値と比べる
         out["grasp_xy_error_mm"] = float(
             np.linalg.norm(result.grasp.position[:2] - np.array(
